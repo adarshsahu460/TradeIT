@@ -3,10 +3,12 @@ import { createServer } from "node:http";
 import { WebSocket, WebSocketServer } from "ws";
 
 import { app } from "./app";
-import { engine } from "./matching";
+import { config } from "./config";
+import { connectDatabase, disconnectDatabase } from "./db";
+import { engine, initializeMatchingEngine } from "./matching";
 import { logger } from "./logger";
 
-const port = Number.parseInt(process.env.PORT ?? "4000", 10);
+const port = config.port;
 
 const server = createServer(app);
 const wss = new WebSocketServer({ server, path: "/ws" });
@@ -47,6 +49,28 @@ wss.on("connection", (socket: WebSocket) => {
   });
 });
 
-server.listen(port, () => {
-  logger.info({ port }, "HTTP server listening");
-});
+const shutdown = async () => {
+  logger.info("Shutting down server");
+  wss.clients.forEach((client) => client.terminate());
+  wss.close();
+  server.close();
+  await disconnectDatabase();
+};
+
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
+
+const bootstrap = async () => {
+  try {
+    await connectDatabase();
+    await initializeMatchingEngine();
+    server.listen(port, () => {
+      logger.info({ port }, "HTTP server listening");
+    });
+  } catch (error) {
+    logger.error({ error }, "Failed to start server");
+    process.exit(1);
+  }
+};
+
+void bootstrap();

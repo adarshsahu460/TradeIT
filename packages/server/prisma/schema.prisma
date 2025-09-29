@@ -1,0 +1,83 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String         @id @default(uuid())
+  email         String         @unique
+  passwordHash  String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  orders        Order[]
+  refreshTokens RefreshToken[]
+}
+
+model Order {
+  id               String       @id
+  userId           String
+  user             User         @relation(fields: [userId], references: [id])
+  symbol           String
+  side             OrderSide
+  type             OrderType
+  price            Float
+  quantity         Float
+  filledQuantity   Float        @default(0)
+  remainingQuantity Float       @default(0)
+  status           OrderStatus  @default(open)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  makerTrades      Trade[]      @relation("Maker")
+  takerTrades      Trade[]      @relation("Taker")
+
+  @@index([symbol, status])
+}
+
+model Trade {
+  id            String   @id @default(uuid())
+  takerOrderId  String
+  makerOrderId  String
+  symbol        String
+  price         Float
+  quantity      Float
+  executedAt    DateTime @default(now())
+  takerOrder    Order    @relation("Taker", fields: [takerOrderId], references: [id])
+  makerOrder    Order    @relation("Maker", fields: [makerOrderId], references: [id])
+
+  @@index([symbol, executedAt])
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  jti       String   @unique
+  tokenHash String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+enum OrderSide {
+  buy
+  sell
+}
+
+enum OrderType {
+  limit
+  market
+}
+
+enum OrderStatus {
+  open
+  partial
+  filled
+  cancelled
+  rejected
+}

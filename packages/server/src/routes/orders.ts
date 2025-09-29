@@ -2,14 +2,15 @@ import type { Request, Response } from "express";
 import { Router } from "express";
 import { z } from "zod";
 
+import { authenticate } from "../auth/middleware";
 import { engine } from "../matching";
 import type { IncomingOrder } from "../matching";
 import { logger } from "../logger";
+import { persistProcessedOrder } from "../services/orderPersistence";
 
 const router = Router();
 
 const orderSchema = z.object({
-  userId: z.string().min(1),
   symbol: z
     .string()
     .min(1)
@@ -22,8 +23,8 @@ const orderSchema = z.object({
 
 type OrderPayload = z.infer<typeof orderSchema>;
 
-const toIncomingOrder = (payload: OrderPayload): IncomingOrder => ({
-  userId: payload.userId,
+const toIncomingOrder = (payload: OrderPayload, userId: string): IncomingOrder => ({
+  userId,
   symbol: payload.symbol,
   side: payload.side,
   type: payload.type,
@@ -31,7 +32,7 @@ const toIncomingOrder = (payload: OrderPayload): IncomingOrder => ({
   price: payload.type === "limit" ? payload.price : payload.price ?? undefined,
 });
 
-router.post("/", (req: Request, res: Response) => {
+router.post("/", authenticate, async (req: Request, res: Response) => {
   const parsed = orderSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({
@@ -40,10 +41,22 @@ router.post("/", (req: Request, res: Response) => {
     });
   }
 
-  const incomingOrder = toIncomingOrder(parsed.data);
+  if (!req.user) {
+    return res.status(401).json({ status: "error", message: "Unauthorized" });
+  }
+
+  const incomingOrder = toIncomingOrder(parsed.data, req.user.id);
   const result = engine.placeOrder(incomingOrder);
 
   logger.info({ order: incomingOrder, result }, "Processed order");
+
+  if (result.status === "accepted") {
+    try {
+      await persistProcessedOrder(result);
+    } catch (error) {
+      logger.error({ error }, "Failed to persist order result");
+    }
+  }
 
   if (result.status === "rejected") {
     return res.status(422).json({

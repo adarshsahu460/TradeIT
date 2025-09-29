@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import type { ChangeEvent } from "react";
 
 import "./App.css";
+import { useAuth } from "./auth/AuthContext";
+import { AuthPanel } from "./components/AuthPanel";
 import { ConnectionStatus } from "./components/ConnectionStatus";
 import { OrderForm, type OrderFormValues } from "./components/OrderForm";
 import { OrderBook } from "./components/OrderBook";
@@ -14,6 +16,7 @@ const WS_URL = import.meta.env.VITE_WS_URL ?? "ws://localhost:4000/ws";
 
 function App() {
   const { status, error, symbols, orderBooks, trades } = useTradingFeed(WS_URL);
+  const { user, authorizedFetch, logout } = useAuth();
   const [selectedSymbol, setSelectedSymbol] = useState<string>(DEFAULT_SYMBOLS[0] ?? "");
 
   useEffect(() => {
@@ -28,8 +31,12 @@ function App() {
     setSelectedSymbol(event.target.value);
   };
 
+  if (!user) {
+    return <AuthPanel />;
+  };
+
   const placeOrder = async (values: OrderFormValues) => {
-    const response = await fetch(`${API_BASE_URL}/api/orders`, {
+    const response = await authorizedFetch(`${API_BASE_URL}/api/orders`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -40,7 +47,8 @@ function App() {
     if (!response.ok) {
       const data = await response.json().catch(() => null);
       const reason = data?.reason ?? data?.errors ?? "Order rejected";
-      throw new Error(typeof reason === "string" ? reason : JSON.stringify(reason));
+      const message = typeof reason === "string" ? reason : JSON.stringify(reason);
+      throw new Error(message);
     }
   };
 
@@ -51,7 +59,15 @@ function App() {
           <h1>TradeIT Exchange</h1>
           <p className="subtitle">Real-time matching engine playground</p>
         </div>
-        <ConnectionStatus status={status} error={error} />
+        <div className="header-actions">
+          <ConnectionStatus status={status} error={error} />
+          <div className="user-chip">
+            <span>{user.email}</span>
+            <button type="button" onClick={logout}>
+              Sign out
+            </button>
+          </div>
+        </div>
       </header>
       <section className="toolbar">
         <label>
@@ -72,7 +88,15 @@ function App() {
       <main className="content-grid">
         <OrderBook snapshot={orderBook} />
         <aside className="sidebar">
-          {selectedSymbol ? <OrderForm symbol={selectedSymbol} onSubmit={placeOrder} /> : null}
+          {selectedSymbol ? (
+            <OrderForm
+              symbol={selectedSymbol}
+              userId={user.id}
+              onSubmit={async (payload) => {
+                await placeOrder(payload);
+              }}
+            />
+          ) : null}
           {selectedSymbol ? <TradesFeed symbol={selectedSymbol} trades={trades} /> : null}
         </aside>
       </main>

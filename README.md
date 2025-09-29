@@ -7,6 +7,8 @@ TradeIT is a full-stack trading simulator designed to showcase a WebSocket-power
 - **Matching engine** with FIFO limit book, market order support, and snapshot publishing.
 - **WebSocket gateway** that streams order, trade, and book events to connected clients.
 - **REST API** for book snapshots and order submission.
+- **JWT authentication** with access/refresh tokens, secure cookie storage, and user management.
+- **PostgreSQL persistence** (via Prisma ORM) for users, orders, trades, and refresh tokens.
 - **React dashboard** that visualises the book, recent trades, and exposes an order form.
 - **Shared contract package** to keep types aligned across services.
 - **Vitest test suite** covering core matching scenarios.
@@ -25,16 +27,38 @@ TradeIT/
 
 ## Getting Started
 
-```bash
-npm install
-npm run dev
-```
+1. Copy the environment template and fill in secrets (especially the database URL and JWT secrets):
+
+  ```bash
+  cp .env.example .env
+  ```
+
+2. Install workspace dependencies and generate the Prisma client:
+
+  ```bash
+  npm install
+  ```
+
+3. Apply database migrations (PostgreSQL / Supabase connection required):
+
+  ```bash
+  npm run prisma:migrate:dev --workspace @tradeit/server
+  ```
+
+4. Start the full stack (shared watcher, API, and UI):
+
+  ```bash
+  npm run dev
+  ```
 
 The dev script starts three processes in parallel:
 
 - `packages/shared`: TypeScript build in `--watch` mode so downstream packages receive fresh artifacts.
 - `packages/server`: HTTP + WebSocket server at `http://localhost:4000` (WS on `ws://localhost:4000/ws`).
 - `packages/web`: Vite dev server at `http://localhost:5173` with API proxying to the backend.
+
+> The root `postinstall` hook runs `prisma generate` (server) and builds the shared package so compiled artifacts exist for consumers.
+> The backend also runs `prisma migrate deploy` on startup by default (set `RUN_DATABASE_MIGRATIONS=false` to skip automatic migrations).
 
 ### Available Scripts
 
@@ -46,8 +70,15 @@ The dev script starts three processes in parallel:
 | `npm run test` | Execute test suites (Vitest) for server and web (when present). |
 | `npm run dev --workspace @tradeit/server` | Run only the backend in watch mode. |
 | `npm run dev --workspace @tradeit/web` | Run only the frontend dev server. |
+| `npm run prisma:migrate:dev --workspace @tradeit/server` | Apply Prisma migrations locally (requires `DATABASE_URL`). |
+| `npm run prisma:migrate:deploy --workspace @tradeit/server` | Deploy migrations in production. |
 
-> The root `postinstall` hook builds `@tradeit/shared` so compiled artifacts exist for consumers.
+## Authentication Flow
+
+- Users can register and log in with email/password (credentials stored with `bcrypt` hashes).
+- Access tokens are short-lived JWTs returned to the frontend; refresh tokens are long-lived JWTs hashed and persisted in the `RefreshToken` table.
+- Refresh tokens are transported via HTTP-only cookies and rotated on each refresh to mitigate replay attacks.
+- The React frontend keeps the access token in memory/local storage and transparently refreshes when the API responds with `401`.
 
 ## API Overview
 
@@ -55,7 +86,12 @@ The dev script starts three processes in parallel:
 
 - `GET /health` &mdash; Service health, timestamp, and supported symbols.
 - `GET /api/book/:symbol` &mdash; Current order book snapshot for a symbol.
-- `POST /api/orders` &mdash; Submit an order.
+- `POST /api/auth/register` &mdash; Create a user account.
+- `POST /api/auth/login` &mdash; Issue an access token + refresh cookie.
+- `POST /api/auth/refresh` &mdash; Rotate tokens (requires refresh cookie).
+- `POST /api/auth/logout` &mdash; Revoke the active refresh token.
+- `GET /api/auth/me` &mdash; Return the authenticated user profile.
+- `POST /api/orders` &mdash; Submit an order (requires `Authorization: Bearer <accessToken>` header).
   - Request body matches `OrderInput` from `@tradeit/shared`.
   - Returns acceptance status, executed trades, resting order (if any), and the latest snapshot.
 
@@ -84,9 +120,9 @@ npm run test --workspace @tradeit/server
 
 ## Next Steps
 
-- Persist orders and trades in a database.
 - Introduce Kafka/Redis streams for scalable event distribution.
-- Implement authentication, risk checks, and user portfolios.
+- Expand risk checks (exposure limits, cancel/replace handling, user portfolios).
+- Add portfolio and trade history views in the frontend dashboard.
 - Add more comprehensive test coverage (e.g., cancels/amends, multi-symbol scenarios).
 
 ## Troubleshooting

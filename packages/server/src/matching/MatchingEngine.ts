@@ -42,6 +42,12 @@ export class MatchingEngine {
     return this.books.get(symbol)?.snapshot();
   }
 
+  public restore(order: Order) {
+    this.ensureSymbol(order.symbol);
+    const book = this.books.get(order.symbol)!;
+    book.restore(order);
+  }
+
   public placeOrder(input: IncomingOrder): ProcessedOrderResult {
     this.ensureSymbol(input.symbol);
     const orderBook = this.books.get(input.symbol)!;

@@ -7,15 +7,18 @@ import { OrderForm } from "../OrderForm";
 
 describe("OrderForm", () => {
   const symbol = "AAPL";
+  const userId = "user-123";
 
   it("renders limit price input and hides it for market orders", async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     const user = userEvent.setup();
 
     await act(async () => {
-      render(<OrderForm symbol={symbol} onSubmit={onSubmit} />);
+      render(<OrderForm symbol={symbol} userId={userId} onSubmit={onSubmit} />);
     });
     await screen.findByRole("heading", { name: /new order/i });
+
+    expect(screen.getByText(userId)).toBeInTheDocument();
 
     const priceInput = screen.getByLabelText(/price/i);
     expect(priceInput).toBeInTheDocument();
@@ -38,7 +41,7 @@ describe("OrderForm", () => {
     const user = userEvent.setup();
 
     await act(async () => {
-      render(<OrderForm symbol={symbol} onSubmit={onSubmit} />);
+      render(<OrderForm symbol={symbol} userId={userId} onSubmit={onSubmit} />);
     });
     await screen.findByRole("heading", { name: /new order/i });
 
@@ -50,6 +53,7 @@ describe("OrderForm", () => {
 
     expect(onSubmit.mock.calls[0][0]).toMatchObject({
       symbol,
+      userId,
       side: "buy",
       type: "limit",
     });
@@ -63,7 +67,7 @@ describe("OrderForm", () => {
     const user = userEvent.setup();
 
     await act(async () => {
-      render(<OrderForm symbol={symbol} onSubmit={onSubmit} />);
+      render(<OrderForm symbol={symbol} userId={userId} onSubmit={onSubmit} />);
     });
     await screen.findByRole("heading", { name: /new order/i });
 

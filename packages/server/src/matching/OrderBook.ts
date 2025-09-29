@@ -110,6 +110,12 @@ export class OrderBook {
     return { trades };
   }
 
+  public restore(order: Order) {
+    const targetBook = order.side === "buy" ? this.bids : this.asks;
+    const restoredOrder = cloneOrder(order, order.quantity);
+    this.addToBook(restoredOrder, targetBook);
+  }
+
   private addToBook(order: Order, book: PriceLevel[]) {
     let level = book.find((entry) => entry.price === order.price);
     if (!level) {

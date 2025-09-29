@@ -7,13 +7,12 @@ export type OrderFormValues = OrderInput;
 
 interface OrderFormProps {
   symbol: string;
+  userId: string;
   onSubmit: (values: OrderFormValues) => Promise<void>;
 }
 
-const defaultUserId = `trader-${Math.random().toString(36).slice(2, 8)}`;
-
-const initialState = (symbol: string): OrderFormValues => ({
-  userId: defaultUserId,
+const initialState = (symbol: string, userId: string): OrderFormValues => ({
+  userId,
   symbol,
   side: "buy",
   type: "limit",
@@ -21,20 +20,24 @@ const initialState = (symbol: string): OrderFormValues => ({
   price: 100,
 });
 
-export function OrderForm({ symbol, onSubmit }: OrderFormProps) {
-  const [values, setValues] = useState<OrderFormValues>(() => initialState(symbol));
+export function OrderForm({ symbol, userId, onSubmit }: OrderFormProps) {
+  const [values, setValues] = useState<OrderFormValues>(() => initialState(symbol, userId));
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | undefined>();
   const previousSymbolRef = useRef(symbol);
+  const previousUserRef = useRef(userId);
 
   useEffect(() => {
-    if (previousSymbolRef.current === symbol) {
-      return;
+    if (previousSymbolRef.current !== symbol || previousUserRef.current !== userId) {
+      previousSymbolRef.current = symbol;
+      previousUserRef.current = userId;
+      setValues((prev: OrderFormValues) => ({
+        ...prev,
+        symbol,
+        userId,
+      }));
     }
-
-    previousSymbolRef.current = symbol;
-    setValues((prev: OrderFormValues) => ({ ...prev, symbol }));
-  }, [symbol]);
+  }, [symbol, userId]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -44,7 +47,7 @@ export function OrderForm({ symbol, onSubmit }: OrderFormProps) {
     try {
       await onSubmit(values);
       setMessage("Order submitted successfully");
-      setValues(initialState(symbol));
+      setValues(initialState(symbol, userId));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Failed to submit order");
     } finally {
@@ -55,17 +58,10 @@ export function OrderForm({ symbol, onSubmit }: OrderFormProps) {
   return (
     <form className="order-form" onSubmit={handleSubmit}>
       <h2>New Order</h2>
-      <label>
-        Trader ID
-        <input
-          type="text"
-          value={values.userId}
-          onChange={(event: ChangeEvent<HTMLInputElement>) =>
-            setValues((prev: OrderFormValues) => ({ ...prev, userId: event.target.value }))
-          }
-          required
-        />
-      </label>
+      <div className="order-form-section">
+        <span className="order-form-label">Trader</span>
+        <span className="order-form-badge">{values.userId}</span>
+      </div>
 
       <label>
         Side
