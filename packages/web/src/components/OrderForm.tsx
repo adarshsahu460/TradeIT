@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 
 import type { OrderInput, OrderSide } from "@tradeit/shared";
@@ -25,8 +25,14 @@ export function OrderForm({ symbol, onSubmit }: OrderFormProps) {
   const [values, setValues] = useState<OrderFormValues>(() => initialState(symbol));
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | undefined>();
+  const previousSymbolRef = useRef(symbol);
 
   useEffect(() => {
+    if (previousSymbolRef.current === symbol) {
+      return;
+    }
+
+    previousSymbolRef.current = symbol;
     setValues((prev: OrderFormValues) => ({ ...prev, symbol }));
   }, [symbol]);
 

@@ -1,11 +1,12 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
+import type { PluginOption } from "vite";
+import type { UserConfig as VitestUserConfig } from "vitest/config";
 
 const API_PROXY_TARGET = process.env.VITE_API_PROXY ?? "http://localhost:4000";
 
-// https://vite.dev/config/
-export default defineConfig({
-  plugins: [react()],
+const config: VitestUserConfig = {
+  plugins: [react() as unknown as PluginOption],
   server: {
     proxy: {
       "/api": {
@@ -18,4 +19,12 @@ export default defineConfig({
       },
     },
   },
-});
+  test: {
+    environment: "jsdom",
+    globals: true,
+    setupFiles: "./src/setupTests.ts",
+    css: true,
+  },
+};
+
+export default defineConfig(config);
