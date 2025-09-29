@@ -179,25 +179,101 @@
 .book-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
+  gap: 1.25rem;
 }
 
-.order-book table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.9rem;
+.book-side {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
-.order-book th,
-.order-book td {
-  padding: 0.35rem 0.5rem;
+.book-side-header {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+  padding: 0 0.25rem;
+}
+
+.book-levels {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.book-level-row {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.4rem;
+  background: rgba(148, 163, 184, 0.08);
+  padding: 0.4rem;
+}
+
+.book-side-asks .book-level-row {
+  background: rgba(248, 113, 113, 0.08);
+}
+
+.book-side-bids .book-level-row {
+  background: rgba(74, 222, 128, 0.08);
+}
+
+.level-bar {
+  position: absolute;
+  inset: 0;
+  transform-origin: left;
+  opacity: 0.22;
+  transition: width 0.25s ease-in-out;
+}
+
+.book-side-bids .level-bar {
+  background: linear-gradient(90deg, rgba(34, 197, 94, 0.7), rgba(13, 148, 136, 0.6));
+}
+
+.book-side-asks .level-bar {
+  background: linear-gradient(90deg, rgba(248, 113, 113, 0.7), rgba(239, 68, 68, 0.6));
+}
+
+.level-cells {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.8rem;
+  color: #e2e8f0;
   text-align: right;
 }
 
-.order-book thead {
+.level-cells span {
+  z-index: 1;
+}
+
+.level-price.bid {
+  color: #34d399;
+}
+
+.level-price.ask {
+  color: #f87171;
+}
+
+.level-qty {
+  color: #cbd5f5;
+}
+
+.level-qty.cumulative {
   color: #94a3b8;
-  font-size: 0.75rem;
-  text-transform: uppercase;
+}
+
+.book-empty {
+  padding: 1.25rem 0;
+  text-align: center;
+  font-size: 0.85rem;
+  color: #94a3b8;
+  background: rgba(148, 163, 184, 0.08);
+  border-radius: 0.75rem;
 }
 
 .order-form {

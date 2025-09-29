@@ -56,69 +56,139 @@ export const useTradingFeed = (wsUrl: string): TradingFeedState => {
   const [error, setError] = useState<string | undefined>();
 
   const socketRef = useRef<WebSocket | null>(null);
+  const reconnectTimeoutRef = useRef<number | null>(null);
+  const reconnectDelayRef = useRef<number>(500);
 
   useEffect(() => {
-  const socket = new WebSocket(wsUrl);
-  socketRef.current = socket;
+    let manualClose = false;
+    let isUnmounted = false;
 
-    setStatus("connecting");
-    setError(undefined);
+    const clearReconnectTimeout = () => {
+      if (reconnectTimeoutRef.current !== null) {
+        window.clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+    };
 
-    socket.addEventListener("open", () => {
-      setStatus("open");
-    });
+    const scheduleReconnect = () => {
+      if (isUnmounted) {
+        return;
+      }
 
-    socket.addEventListener("close", () => {
-      setStatus("closed");
-    });
+      clearReconnectTimeout();
 
-    socket.addEventListener("error", (event) => {
-      console.error("WebSocket error", event);
-      setStatus("error");
-      setError("WebSocket connection error");
-    });
+      const delay = reconnectDelayRef.current;
+      reconnectTimeoutRef.current = window.setTimeout(() => {
+        reconnectDelayRef.current = Math.min(reconnectDelayRef.current * 2, 8000);
+        connect();
+      }, delay);
+    };
 
-    socket.addEventListener("message", (message) => {
-      try {
-        const parsed = JSON.parse(message.data as string);
-        if (!isEngineEvent(parsed)) {
+    const connect = () => {
+      if (isUnmounted) {
+        return;
+      }
+
+      clearReconnectTimeout();
+      reconnectDelayRef.current = 500;
+      setStatus("connecting");
+      setError(undefined);
+
+      const socket = new WebSocket(wsUrl);
+      socketRef.current = socket;
+
+      socket.onopen = () => {
+        if (isUnmounted) {
           return;
         }
 
-        switch (parsed.type) {
-          case "engine:hello":
-            setSymbols(parsed.payload.symbols);
-            break;
-          case "book:snapshot": {
-            const snapshot = parsed.payload.snapshot;
-            setOrderBooks((prev: Record<string, OrderBookSnapshot>) => ({
-              ...prev,
-              [snapshot.symbol]: snapshot,
-            }));
-            break;
-          }
-          case "trade:executed": {
-            const trade = parsed.payload.trade;
-            setTrades((prev: Trade[]) => {
-              const next = [trade, ...prev];
-              return next.slice(0, MAX_TRADES);
-            });
-            break;
-          }
-          case "order:rejected":
-            setError(parsed.payload.reason);
-            break;
-          default:
-            break;
+        reconnectDelayRef.current = 500;
+        setStatus("open");
+      };
+
+      socket.onclose = (event) => {
+        if (manualClose || isUnmounted) {
+          return;
         }
-      } catch (err) {
-        console.error("Failed to parse WebSocket message", err);
-        setError("Unable to parse WebSocket message");
-      }
-    });
+
+        setStatus(event.wasClean ? "closed" : "error");
+        if (!event.wasClean) {
+          setError("WebSocket connection interrupted");
+        }
+        scheduleReconnect();
+      };
+
+      socket.onerror = (event) => {
+        if (manualClose || isUnmounted) {
+          return;
+        }
+
+        console.error("WebSocket error", event);
+        setStatus("error");
+        setError("WebSocket connection error");
+        scheduleReconnect();
+      };
+
+      socket.onmessage = (message) => {
+        if (isUnmounted) {
+          return;
+        }
+
+        try {
+          const parsed = JSON.parse(message.data as string);
+          if (!isEngineEvent(parsed)) {
+            return;
+          }
+
+          switch (parsed.type) {
+            case "engine:hello":
+              setSymbols(parsed.payload.symbols);
+              break;
+            case "book:snapshot": {
+              const snapshot = parsed.payload.snapshot;
+              setOrderBooks((prev: Record<string, OrderBookSnapshot>) => ({
+                ...prev,
+                [snapshot.symbol]: snapshot,
+              }));
+              break;
+            }
+            case "trade:executed": {
+              const trade = parsed.payload.trade;
+              setTrades((prev: Trade[]) => {
+                const next = [trade, ...prev];
+                return next.slice(0, MAX_TRADES);
+              });
+              break;
+            }
+            case "order:rejected":
+              setError(parsed.payload.reason);
+              break;
+            default:
+              break;
+          }
+        } catch (err) {
+          console.error("Failed to parse WebSocket message", err);
+          setError("Unable to parse WebSocket message");
+        }
+      };
+    };
+
+    connect();
 
     return () => {
-      socket.close();
+      isUnmounted = true;
+      manualClose = true;
+      clearReconnectTimeout();
+      const socket = socketRef.current;
+      if (socket) {
+        if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
+          socket.close();
+        }
+        socket.onopen = null;
+        socket.onclose = null;
+        socket.onerror = null;
+        socket.onmessage = null;
+      }
       socketRef.current = null;
     };
   }, [wsUrl]);

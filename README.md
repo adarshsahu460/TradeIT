@@ -12,6 +12,7 @@ TradeIT is a full-stack trading simulator designed to showcase a WebSocket-power
 - **React dashboard** that visualises the book, recent trades, and exposes an order form.
 - **Shared contract package** to keep types aligned across services.
 - **Vitest test suite** covering core matching scenarios.
+- **Synthetic liquidity generator** to keep demo markets active with configurable intensity.
 
 ## Project Structure
 
@@ -59,6 +60,7 @@ The dev script starts three processes in parallel:
 
 > The root `postinstall` hook runs `prisma generate` (server) and builds the shared package so compiled artifacts exist for consumers.
 > The backend also runs `prisma migrate deploy` on startup by default (set `RUN_DATABASE_MIGRATIONS=false` to skip automatic migrations).
+> Synthetic trade generation is enabled by default for demos. Use `ENABLE_SYNTHETIC_TRADES=false` or tweak `SYNTHETIC_TRADES_INTERVAL_MS` to change behavior.
 
 ### Available Scripts
 

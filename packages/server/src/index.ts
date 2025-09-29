@@ -5,7 +5,7 @@ import { WebSocket, WebSocketServer } from "ws";
 import { app } from "./app";
 import { config } from "./config";
 import { connectDatabase, disconnectDatabase } from "./db";
-import { engine, initializeMatchingEngine } from "./matching";
+import { engine, haltSyntheticFeed, initializeMatchingEngine } from "./matching";
 import { logger } from "./logger";
 
 const port = config.port;
@@ -51,6 +51,7 @@ wss.on("connection", (socket: WebSocket) => {
 
 const shutdown = async () => {
   logger.info("Shutting down server");
+  haltSyntheticFeed();
   wss.clients.forEach((client) => client.terminate());
   wss.close();
   server.close();

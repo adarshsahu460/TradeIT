@@ -40,6 +40,8 @@ const envSchema = z.object({
   REFRESH_TOKEN_COOKIE_SECURE: z.enum(["true", "false"]).optional(),
   SEED_BOOK: z.enum(["true", "false"]).optional(),
   RUN_DATABASE_MIGRATIONS: z.enum(["true", "false"]).optional(),
+  ENABLE_SYNTHETIC_TRADES: z.enum(["true", "false"]).optional(),
+  SYNTHETIC_TRADES_INTERVAL_MS: z.string().optional(),
 });
 
 const parsed = envSchema.parse(process.env);
@@ -82,6 +84,8 @@ type Config = {
   seedBook: boolean;
   isTestEnvironment: boolean;
   runDatabaseMigrations: boolean;
+  enableSyntheticTrades: boolean;
+  syntheticTradesIntervalMs: number;
 };
 
 export const config: Config = {
@@ -98,4 +102,13 @@ export const config: Config = {
   seedBook: parsed.SEED_BOOK !== "false",
   isTestEnvironment,
   runDatabaseMigrations: parsed.RUN_DATABASE_MIGRATIONS !== "false",
+  enableSyntheticTrades: parsed.ENABLE_SYNTHETIC_TRADES !== "false",
+  syntheticTradesIntervalMs: (() => {
+    const value = parsed.SYNTHETIC_TRADES_INTERVAL_MS;
+    if (!value) {
+      return 1500;
+    }
+    const parsedValue = Number.parseInt(value, 10);
+    return Number.isNaN(parsedValue) ? 1500 : Math.max(parsedValue, 250);
+  })(),
 };
