@@ -1,0 +1,261 @@
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+#root {
+  margin: 0 auto;
+  padding: 1.5rem;
+  max-width: 1200px;
+  color: #f5f5f5;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 2rem;
+}
+
+.subtitle {
+  margin: 0.25rem 0 0;
+  color: #aab0c0;
+}
+
+.status-bar {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.status-error {
+  color: #ff6b81;
+  font-size: 0.85rem;
+}
+
+.badge {
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.badge-success {
+  background: rgba(34, 197, 94, 0.15);
+  color: #34d399;
+}
+
+.badge-warn {
+  background: rgba(250, 204, 21, 0.15);
+  color: #facc15;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.badge-neutral {
+  background: rgba(148, 163, 184, 0.15);
+  color: #cbd5f5;
+}
+
+.badge-error {
+  background: rgba(248, 113, 121, 0.15);
+  color: #f87171;
+}
+
+.toolbar {
+  display: flex;
+  justify-content: flex-start;
+  gap: 1rem;
+  background: rgba(15, 23, 42, 0.6);
+  padding: 1rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.toolbar label {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.85rem;
+  color: #94a3b8;
+  gap: 0.5rem;
+}
+
+.toolbar select {
+  background: rgba(15, 23, 42, 0.9);
+  color: inherit;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  border-radius: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 1rem;
+}
+
+.content-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 1.5rem;
+  align-items: flex-start;
+}
+
+.order-book,
+.sidebar,
+.trades-feed {
+  background: rgba(15, 23, 42, 0.6);
+  border-radius: 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  padding: 1.25rem;
+  backdrop-filter: blur(12px);
+}
+
+.order-book header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.order-book h2,
+.trades-feed h2 {
+  margin: 0;
+}
+
+.last-trade {
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: #94a3b8;
+}
+
+.book-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.order-book table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.order-book th,
+.order-book td {
+  padding: 0.35rem 0.5rem;
+  text-align: right;
+}
+
+.order-book thead {
+  color: #94a3b8;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+
+.order-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.order-form h2 {
+  margin: 0;
+}
+
+.order-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+
+.order-form input,
+.order-form select {
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  color: inherit;
+  font-size: 1rem;
+}
+
+.order-form .submit {
+  background: linear-gradient(90deg, #38bdf8, #6366f1);
+  border: none;
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+  color: #0f172a;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.order-form .submit:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.order-form .submit:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 30px rgba(56, 189, 248, 0.3);
+}
+
+.form-message {
+  margin: 0.25rem 0 0;
+  font-size: 0.85rem;
+  color: #34d399;
+}
+
+.trades-feed ul {
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.trades-feed li {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  font-size: 0.85rem;
+}
+
+.trades-feed .empty {
+  text-align: center;
+  color: #94a3b8;
+}
+
+@media (max-width: 960px) {
+  #root {
+    padding: 1rem;
+  }
+
+  .content-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    display: grid;
+    gap: 1rem;
+  }
+}
