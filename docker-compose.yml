@@ -1,0 +1,125 @@
+services:
+  postgres:
+    image: postgres:15
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: tradeit
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  zookeeper:
+    image: bitnamilegacy/zookeeper:3.9.2
+    restart: unless-stopped
+    environment:
+      ALLOW_ANONYMOUS_LOGIN: "yes"
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: bitnamilegacy/kafka:3.7.0
+    restart: unless-stopped
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_CFG_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+    ports:
+      - "9092:9092"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: tradeit/server:latest
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - kafka
+      - redis
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      NODE_OPTIONS: --experimental-specifier-resolution=node
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/tradeit
+      KAFKA_BROKERS: kafka:9092
+      REDIS_URL: redis://redis:6379
+      SERVICE_NAME: tradeit-api
+      PORT: 4000
+      GATEWAY_PORT: 4001
+    ports:
+      - "4000:4000"
+    command: ["node", "packages/server/dist/index.js"]
+
+  matcher:
+    image: tradeit/server:latest
+    restart: unless-stopped
+    depends_on:
+      - kafka
+      - redis
+      - postgres
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      NODE_OPTIONS: --experimental-specifier-resolution=node
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/tradeit
+      KAFKA_BROKERS: kafka:9092
+      REDIS_URL: redis://redis:6379
+      SERVICE_NAME: tradeit-matcher
+      ENABLE_SYNTHETIC_TRADES: "true"
+    command: ["node", "packages/server/dist/matcherWorker.js"]
+
+  gateway:
+    image: tradeit/server:latest
+    restart: unless-stopped
+    depends_on:
+      - kafka
+      - redis
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      NODE_OPTIONS: --experimental-specifier-resolution=node
+      KAFKA_BROKERS: kafka:9092
+      REDIS_URL: redis://redis:6379
+      SERVICE_NAME: tradeit-gateway
+      GATEWAY_PORT: 4001
+    ports:
+      - "4001:4001"
+    command: ["node", "packages/server/dist/gatewayServer.js"]
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+      args:
+        VITE_API_URL: http://localhost:4000
+        VITE_WS_URL: ws://localhost:4001/ws
+    image: tradeit/web:latest
+    restart: unless-stopped
+    depends_on:
+      - api
+      - gateway
+    environment:
+      VITE_API_URL: http://localhost:4000
+      VITE_WS_URL: ws://localhost:4001/ws
+    ports:
+      - "8080:80"
+
+volumes:
+  postgres-data:

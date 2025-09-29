@@ -1,25 +1,16 @@
 import { DEFAULT_SYMBOLS } from "@tradeit/shared";
 
-import { config } from "../config";
-import { getPrismaClient } from "../db";
-import type { IncomingOrder } from "./MatchingEngine";
-import { MatchingEngine } from "./MatchingEngine";
-import { persistProcessedOrder } from "../services/orderPersistence";
-import { ensureSystemUser } from "../services/systemUser";
-import { startSyntheticLiquidity } from "./syntheticLiquidity";
+import { config } from "../config.js";
+import { getPrismaClient } from "../db.js";
+import type { IncomingOrder } from "./MatchingEngine.js";
+import { MatchingEngine } from "./MatchingEngine.js";
+import { startSyntheticLiquidity } from "./syntheticLiquidity.js";
+import { persistProcessedOrder } from "../services/orderPersistence.js";
+import { ensureSystemUser } from "../services/systemUser.js";
 
 export const engine = new MatchingEngine();
 
 DEFAULT_SYMBOLS.forEach((symbol: string) => engine.ensureSymbol(symbol));
-
-let stopSyntheticFeed: (() => void) | null = null;
-
-export const haltSyntheticFeed = () => {
-  if (stopSyntheticFeed) {
-    stopSyntheticFeed();
-    stopSyntheticFeed = null;
-  }
-};
 
 type RestoredOrder = {
   id: string;
@@ -91,20 +82,26 @@ export const initializeMatchingEngine = async () => {
     }
   }
 
-  if (config.enableSyntheticTrades) {
-    const makerUserId = await ensureSystemUser("synthetic-maker@tradeit.local");
-    const takerUserId = await ensureSystemUser("synthetic-taker@tradeit.local");
-    haltSyntheticFeed();
-    stopSyntheticFeed = startSyntheticLiquidity({
-      engine,
-      persist: persistProcessedOrder,
-      makerUserId,
-      takerUserId,
-      intervalMs: config.syntheticTradesIntervalMs,
-    });
-  } else {
-    haltSyntheticFeed();
-  }
+  return seedUserId;
 };
 
-export type { IncomingOrder, ProcessedOrderResult } from "./MatchingEngine";
+export type { IncomingOrder, ProcessedOrderResult } from "./MatchingEngine.js";
+
+export const launchSyntheticFeed = async (submitOrder: (order: IncomingOrder) => Promise<void>) => {
+  if (!config.enableSyntheticTrades) {
+    return () => {
+      /* noop */
+    };
+  }
+
+  const makerUserId = await ensureSystemUser("synthetic-maker@tradeit.local");
+  const takerUserId = await ensureSystemUser("synthetic-taker@tradeit.local");
+
+  return startSyntheticLiquidity({
+    engine,
+    submitOrder,
+    makerUserId,
+    takerUserId,
+    intervalMs: config.syntheticTradesIntervalMs,
+  });
+};

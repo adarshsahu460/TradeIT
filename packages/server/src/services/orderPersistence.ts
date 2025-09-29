@@ -1,8 +1,8 @@
-import type { OrderStatus } from "@prisma/client";
+type OrderStatus = "open" | "partial" | "filled" | "cancelled" | "rejected";
 
-import { getPrismaClient } from "../db";
-import type { ProcessedOrderResult } from "../matching/MatchingEngine";
-import { logger } from "../logger";
+import { getPrismaClient } from "../db.js";
+import { logger } from "../logger.js";
+import type { ProcessedOrderResult } from "../matching/MatchingEngine.js";
 
 const prisma = getPrismaClient();
 
@@ -29,7 +29,7 @@ export const persistProcessedOrder = async (result: ProcessedOrderResult) => {
   const status = determineOrderStatus(order.quantity, remainingQuantity);
 
   try {
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx : any) => {
       await tx.order.create({
         data: {
           id: order.id,

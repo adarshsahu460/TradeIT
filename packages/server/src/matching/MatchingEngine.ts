@@ -1,10 +1,8 @@
 import { randomUUID } from "node:crypto";
+
 import type { EngineEventMap, Order, OrderBookSnapshot, OrderInput, Trade } from "@tradeit/shared";
 
-import { OrderBook } from "./OrderBook";
-
-type OrderType = Order["type"];
-type OrderSide = Order["side"];
+import { OrderBook } from "./OrderBook.js";
 
 export type IncomingOrder = OrderInput;
 

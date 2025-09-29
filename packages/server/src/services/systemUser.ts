@@ -1,5 +1,5 @@
-import { hashPassword } from "../auth/hash";
-import { getPrismaClient } from "../db";
+import { hashPassword } from "../auth/hash.js";
+import { getPrismaClient } from "../db.js";
 
 const creationPromises = new Map<string, Promise<string>>();
 

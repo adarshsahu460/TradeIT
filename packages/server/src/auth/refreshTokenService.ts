@@ -1,5 +1,5 @@
-import { getPrismaClient } from "../db";
-import { hashValue, verifyHash } from "./hash";
+import { getPrismaClient } from "../db.js";
+import { hashValue, verifyHash } from "./hash.js";
 
 const prisma = getPrismaClient();
 

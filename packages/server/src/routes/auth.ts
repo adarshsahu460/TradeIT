@@ -2,22 +2,22 @@ import type { Request, Response } from "express";
 import { Router } from "express";
 import { z } from "zod";
 
-import { getPrismaClient } from "../db";
-import { config } from "../config";
-import { hashPassword, verifyPassword } from "../auth/hash";
-import { authenticate } from "../auth/middleware";
-import {
-  createAccessToken,
-  createRefreshToken,
-  verifyRefreshToken,
-} from "../auth/tokenService";
+import { hashPassword, verifyPassword } from "../auth/hash.js";
+import { authenticate } from "../auth/middleware.js";
 import {
   revokeRefreshToken,
   storeRefreshToken,
   verifyStoredRefreshToken,
-} from "../auth/refreshTokenService";
-import type { AuthenticatedUser } from "../auth/types";
-import { logger } from "../logger";
+} from "../auth/refreshTokenService.js";
+import {
+  createAccessToken,
+  createRefreshToken,
+  verifyRefreshToken,
+} from "../auth/tokenService.js";
+import type { AuthenticatedUser } from "../auth/types.js";
+import { config } from "../config.js";
+import { getPrismaClient } from "../db.js";
+import { logger } from "../logger.js";
 
 const router = Router();
 const prisma = getPrismaClient();
@@ -26,8 +26,6 @@ const credentialsSchema = z.object({
   email: z.string().email().transform((value) => value.toLowerCase()),
   password: z.string().min(8).max(100),
 });
-
-type Credentials = z.infer<typeof credentialsSchema>;
 
 const setRefreshTokenCookie = (res: Response, token: string, expiresAt: Date) => {
   res.cookie(config.refreshTokenCookieName, token, {

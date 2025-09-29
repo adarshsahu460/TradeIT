@@ -1,7 +1,17 @@
 import type { PropsWithChildren } from "react";
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000";
+// Resolve API base URL with a defensive runtime fallback; if the env var is
+// missing inside the built bundle we'll reconstruct a likely host:4000.
+const resolveApiBaseUrl = (): string => {
+  const injected = import.meta.env.VITE_API_URL as string | undefined;
+  if (injected && injected !== "") return injected.replace(/\/$/, "");
+  // Use relative so nginx proxy takes effect; empty string means same-origin
+  return "";
+};
+const API_BASE_URL = resolveApiBaseUrl();
+// eslint-disable-next-line no-console
+console.debug("[Auth] Using API_BASE_URL", API_BASE_URL);
 const STORAGE_KEY = "tradeit.auth";
 
 export interface AuthUser {

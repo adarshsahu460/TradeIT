@@ -11,8 +11,22 @@ import { OrderBook } from "./components/OrderBook";
 import { TradesFeed } from "./components/TradesFeed";
 import { useTradingFeed } from "./hooks/useTradingFeed";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000";
-const WS_URL = import.meta.env.VITE_WS_URL ?? "ws://localhost:4000/ws";
+const resolveApiBase = () => {
+  const envUrl = import.meta.env.VITE_API_URL as string | undefined;
+  if (envUrl && envUrl !== "") return envUrl.replace(/\/$/, "");
+  // Use relative path so nginx proxy handles it
+  return ""; // prefix calls with /api
+};
+const resolveWs = () => {
+  const envWs = import.meta.env.VITE_WS_URL as string | undefined;
+  if (envWs && envWs !== "") return envWs;
+  const loc = typeof window !== 'undefined' ? window.location : { protocol: 'http:', host: 'localhost:8080' } as Location;
+  const scheme = loc.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${scheme}//${loc.host}/ws`;
+};
+
+const API_BASE_URL = resolveApiBase();
+const WS_URL = resolveWs();
 
 function App() {
   const { status, error, symbols, orderBooks, trades } = useTradingFeed(WS_URL);
@@ -36,7 +50,8 @@ function App() {
   };
 
   const placeOrder = async (values: OrderFormValues) => {
-    const response = await authorizedFetch(`${API_BASE_URL}/api/orders`, {
+  const base = API_BASE_URL; // may be empty for same-origin
+  const response = await authorizedFetch(`${base}/api/orders`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

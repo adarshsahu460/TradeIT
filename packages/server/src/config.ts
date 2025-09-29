@@ -1,7 +1,8 @@
-import { config as loadEnv } from "dotenv";
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { config as loadEnv } from "dotenv";
 import { z } from "zod";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -42,6 +43,13 @@ const envSchema = z.object({
   RUN_DATABASE_MIGRATIONS: z.enum(["true", "false"]).optional(),
   ENABLE_SYNTHETIC_TRADES: z.enum(["true", "false"]).optional(),
   SYNTHETIC_TRADES_INTERVAL_MS: z.string().optional(),
+  GATEWAY_PORT: z.string().optional(),
+  KAFKA_BROKERS: z.string().optional(),
+  KAFKA_CLIENT_ID: z.string().optional(),
+  KAFKA_ORDER_TOPIC: z.string().optional(),
+  KAFKA_MARKET_TOPIC: z.string().optional(),
+  REDIS_URL: z.string().optional(),
+  SERVICE_NAME: z.string().optional(),
 });
 
 const parsed = envSchema.parse(process.env);
@@ -86,6 +94,13 @@ type Config = {
   runDatabaseMigrations: boolean;
   enableSyntheticTrades: boolean;
   syntheticTradesIntervalMs: number;
+  gatewayPort: number;
+  kafkaBrokers: string[];
+  kafkaClientId: string;
+  kafkaOrderTopic: string;
+  kafkaMarketTopic: string;
+  redisUrl?: string;
+  serviceName: string;
 };
 
 export const config: Config = {
@@ -111,4 +126,11 @@ export const config: Config = {
     const parsedValue = Number.parseInt(value, 10);
     return Number.isNaN(parsedValue) ? 1500 : Math.max(parsedValue, 250);
   })(),
+  gatewayPort: Number.parseInt(parsed.GATEWAY_PORT ?? "4001", 10),
+  kafkaBrokers: (parsed.KAFKA_BROKERS ?? "localhost:29092").split(",").map((broker) => broker.trim()),
+  kafkaClientId: parsed.KAFKA_CLIENT_ID ?? `tradeit-${process.pid}`,
+  kafkaOrderTopic: parsed.KAFKA_ORDER_TOPIC ?? "orders.commands",
+  kafkaMarketTopic: parsed.KAFKA_MARKET_TOPIC ?? "market.events",
+  redisUrl: parsed.REDIS_URL,
+  serviceName: parsed.SERVICE_NAME ?? "tradeit-service",
 };

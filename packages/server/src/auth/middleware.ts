@@ -1,8 +1,8 @@
 import type { NextFunction, Request, Response } from "express";
 
-import { getPrismaClient } from "../db";
-import { verifyAccessToken } from "./tokenService";
-import type { AuthenticatedUser } from "./types";
+import { getPrismaClient } from "../db.js";
+import { verifyAccessToken } from "./tokenService.js";
+import type { AuthenticatedUser } from "./types.js";
 
 const prisma = getPrismaClient();
 
@@ -26,7 +26,7 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
       return res.status(401).json({ status: "error", message: "Invalid token" });
     }
 
-  req.user = user as AuthenticatedUser;
+    req.user = user as AuthenticatedUser;
     return next();
   } catch (error) {
     return res.status(401).json({ status: "error", message: "Invalid or expired token" });

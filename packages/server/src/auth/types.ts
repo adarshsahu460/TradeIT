@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-namespace */
 export interface AuthenticatedUser {
   id: string;
   email: string;

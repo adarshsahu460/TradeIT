@@ -1,6 +1,6 @@
 import pino from "pino";
 
-import { config } from "./config";
+import { config } from "./config.js";
 
 const isProd = process.env.NODE_ENV === "production";
 

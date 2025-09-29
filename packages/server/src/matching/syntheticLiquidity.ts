@@ -1,7 +1,7 @@
-import type { IncomingOrder, ProcessedOrderResult } from "./MatchingEngine";
-import type { MatchingEngine } from "./MatchingEngine";
 import type { Logger } from "pino";
-import { logger } from "../logger";
+
+import type { IncomingOrder, MatchingEngine } from "./MatchingEngine.js";
+import { logger } from "../logger.js";
 
 type SymbolSettings = {
   basePrice: number;
@@ -99,7 +99,7 @@ const toBpsMultiplier = (bps: number) => 1 + bps / 10_000;
 
 type SyntheticLiquidityOptions = {
   engine: MatchingEngine;
-  persist: (result: ProcessedOrderResult) => Promise<void>;
+  submitOrder: (order: IncomingOrder) => Promise<void>;
   makerUserId: string;
   takerUserId: string;
   intervalMs: number;
@@ -108,7 +108,7 @@ type SyntheticLiquidityOptions = {
 
 export const startSyntheticLiquidity = ({
   engine,
-  persist,
+  submitOrder,
   makerUserId,
   takerUserId,
   intervalMs,
@@ -140,9 +140,9 @@ export const startSyntheticLiquidity = ({
 
       const settings = SYMBOL_SETTINGS[symbol] ?? DEFAULT_SETTINGS;
       const midPrice = jitterPrice(deriveMidPrice(engine, symbol, settings), settings.volatilityBps);
-      const quantity = buildQuantity(settings);
+    const quantity = buildQuantity(settings);
 
-  const makerSide: "buy" | "sell" = Math.random() > 0.5 ? "sell" : "buy";
+    const makerSide: "buy" | "sell" = Math.random() > 0.5 ? "sell" : "buy";
 
       const spreadMultiplier = toBpsMultiplier(settings.spreadBps);
 
@@ -157,10 +157,7 @@ export const startSyntheticLiquidity = ({
         quantity,
       };
 
-      const makerResult = engine.placeOrder(makerOrder);
-      if (makerResult.status === "accepted") {
-        await persist(makerResult);
-      }
+      await submitOrder(makerOrder);
 
       const takerOrder: IncomingOrder = {
         userId: takerUserId,
@@ -170,10 +167,7 @@ export const startSyntheticLiquidity = ({
         quantity,
       };
 
-      const takerResult = engine.placeOrder(takerOrder);
-      if (takerResult.status === "accepted") {
-        await persist(takerResult);
-      }
+      await submitOrder(takerOrder);
     } catch (error) {
       log.warn({ error }, "Synthetic liquidity tick failed");
     } finally {

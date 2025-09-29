@@ -5,8 +5,8 @@ import { fileURLToPath } from "node:url";
 
 import { PrismaClient } from "@prisma/client";
 
-import { config } from "./config";
-import { logger } from "./logger";
+import { config } from "./config.js";
+import { logger } from "./logger.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

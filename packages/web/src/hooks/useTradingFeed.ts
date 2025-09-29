@@ -48,7 +48,53 @@ const isEngineEvent = (data: unknown): data is EngineEvent => {
   return "type" in data && typeof (data as { type: unknown }).type === "string";
 };
 
-export const useTradingFeed = (wsUrl: string): TradingFeedState => {
+// Normal expectation: wsUrl points directly at the gateway (e.g. ws://localhost:4001/ws)
+// Some users have reported the built bundle attempting ws://localhost:8080/ (the web container itself)
+// which indicates the Vite build-time env var wasn't injected (or a cached older bundle) and a
+// fallback inlined by minification chose location.origin. To make the UI more robust in a
+// containerized / reverse-proxy environment, we add a defensive runtime rewrite:
+//  - If the provided wsUrl appears to target the same origin the SPA is served from (port 80/8080)
+//    and has no explicit path segment ("/" only), we assume the intended gateway is on 4001 and
+//    rewrite to that conventional port + /ws path.
+//  - This preserves explicit custom values and only intervenes for the broken case.
+let warnedEmpty = false;
+const normaliseWsUrl = (raw: string): string => {
+  try {
+    if (!raw) {
+      if (typeof window !== 'undefined') {
+        const host = window.location.hostname;
+        const rewritten = `ws://${host}:4001/ws`;
+        if (!warnedEmpty) {
+          // eslint-disable-next-line no-console
+          console.warn('[useTradingFeed] Empty WebSocket URL input; defaulting', { rewritten });
+          warnedEmpty = true;
+        }
+        return rewritten;
+      }
+      return 'ws://localhost:4001/ws';
+    }
+    const u = new URL(raw, typeof window !== 'undefined' ? window.location.href : 'http://localhost');
+    const pathIsRoot = u.pathname === '/' || u.pathname === '';
+    const servedPort = typeof window !== 'undefined' ? window.location.port : '';
+    const likelyFrontendPorts = new Set(['80', '8080', '']); // '' = default 80
+    // Heuristic: if pointing at the SPA origin (same host) on a typical static port, with no path, rewrite.
+    if (pathIsRoot && u.hostname === (typeof window !== 'undefined' ? window.location.hostname : u.hostname) && likelyFrontendPorts.has(u.port || servedPort)) {
+      const host = typeof window !== 'undefined' ? window.location.hostname : u.hostname;
+      const rewritten = `ws://${host}:4001/ws`;
+      if (raw !== rewritten) {
+        // eslint-disable-next-line no-console
+        console.warn('[useTradingFeed] Rewriting suspected incorrect WebSocket URL', { original: raw, rewritten });
+      }
+      return rewritten;
+    }
+    return u.toString().replace(/(?<!:)\/$/, ''); // strip trailing slash (not after protocol)
+  } catch {
+    return raw; // If URL constructor fails, fall back silently.
+  }
+};
+
+export const useTradingFeed = (rawWsUrl: string): TradingFeedState => {
+  const wsUrl = normaliseWsUrl(rawWsUrl);
   const [status, setStatus] = useState<ConnectionStatus>("connecting");
   const [symbols, setSymbols] = useState<string[]>([]);
   const [orderBooks, setOrderBooks] = useState<Record<string, OrderBookSnapshot>>({});
@@ -58,6 +104,8 @@ export const useTradingFeed = (wsUrl: string): TradingFeedState => {
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
   const reconnectDelayRef = useRef<number>(500);
+  const reconnectAttemptsRef = useRef<number>(0);
+  const MAX_FAST_RETRIES = 6;
 
   useEffect(() => {
     let manualClose = false;
@@ -79,7 +127,12 @@ export const useTradingFeed = (wsUrl: string): TradingFeedState => {
 
       const delay = reconnectDelayRef.current;
       reconnectTimeoutRef.current = window.setTimeout(() => {
-        reconnectDelayRef.current = Math.min(reconnectDelayRef.current * 2, 8000);
+        reconnectAttemptsRef.current += 1;
+        if (reconnectAttemptsRef.current > MAX_FAST_RETRIES) {
+          reconnectDelayRef.current = Math.min(reconnectDelayRef.current * 2, 8000);
+        } else {
+          reconnectDelayRef.current = Math.min(reconnectDelayRef.current * 1.5, 4000);
+        }
         connect();
       }, delay);
     };
@@ -90,11 +143,14 @@ export const useTradingFeed = (wsUrl: string): TradingFeedState => {
       }
 
       clearReconnectTimeout();
-      reconnectDelayRef.current = 500;
+  reconnectDelayRef.current = 500;
+  reconnectAttemptsRef.current = 0;
       setStatus("connecting");
       setError(undefined);
 
-      const socket = new WebSocket(wsUrl);
+  // eslint-disable-next-line no-console
+  console.debug('[useTradingFeed] Opening WebSocket', { wsUrl });
+  const socket = new WebSocket(wsUrl);
       socketRef.current = socket;
 
       socket.onopen = () => {

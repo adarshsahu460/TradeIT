@@ -30,6 +30,20 @@ export interface OrderInput {
   price?: number;
 }
 
+export interface OrderCommand {
+  commandId: string;
+  userId: string;
+  symbol: string;
+  side: OrderSide;
+  type: "limit" | "market";
+  quantity: number;
+  price?: number;
+  timestamp: number;
+  source?: string;
+}
+
+export type MarketEvent = EngineEventMap;
+
 export interface OrderBookSnapshot {
   symbol: string;
   bids: Array<{ price: number; quantity: number }>;

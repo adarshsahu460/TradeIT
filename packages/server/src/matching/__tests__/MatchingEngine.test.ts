@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { MatchingEngine } from "../MatchingEngine";
+import { MatchingEngine } from "../MatchingEngine.js";
 
 const createEngine = () => {
   const instance = new MatchingEngine();

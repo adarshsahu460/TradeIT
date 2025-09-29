@@ -4,8 +4,8 @@ import jwt from "jsonwebtoken";
 import type { Secret, SignOptions } from "jsonwebtoken";
 import type { StringValue } from "ms";
 
-import { config } from "../config";
-import type { AuthenticatedUser } from "./types";
+import { config } from "../config.js";
+import type { AuthenticatedUser } from "./types.js";
 
 interface BaseTokenPayload {
   sub: string;
