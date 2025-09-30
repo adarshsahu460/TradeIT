@@ -25,7 +25,7 @@ const bootstrap = async () => {
     await connectDatabase();
     await connectRedis();
     server.listen(port, () => {
-      logger.info({ port, service: config.serviceName }, "API server listening");
+      logger.info({ port, service: config.serviceName, kafkaBrokers: config.kafkaBrokers }, "API server listening");
     });
   } catch (error) {
     logger.error({ error }, "Failed to start API service");

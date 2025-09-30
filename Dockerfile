@@ -11,6 +11,7 @@ COPY packages/server/package.json packages/server/
 COPY scripts ./scripts
 COPY packages/shared ./packages/shared
 COPY packages/server/prisma ./packages/server/prisma
+COPY packages/server/scripts ./packages/server/scripts
 RUN npm ci
 
 FROM ${NODE_IMAGE} AS builder
@@ -34,6 +35,7 @@ COPY packages/server/package.json packages/server/
 COPY scripts ./scripts
 COPY packages/shared ./packages/shared
 COPY packages/server/prisma ./packages/server/prisma
+COPY packages/server/scripts ./packages/server/scripts
 RUN npm ci --omit=dev
 
 FROM ${NODE_IMAGE}-slim AS runner

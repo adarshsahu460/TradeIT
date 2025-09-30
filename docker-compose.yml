@@ -33,8 +33,11 @@ services:
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_CFG_ZOOKEEPER_CONNECT: zookeeper:2181
+      # Single listener setup sufficient for local compose + host access.
+      # Host connects via mapped localhost:9092; in-network containers use kafka:9092.
       KAFKA_CFG_LISTENERS: PLAINTEXT://:9092
       KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
       ALLOW_PLAINTEXT_LISTENER: "yes"
     ports:
@@ -60,7 +63,6 @@ services:
       REDIS_URL: redis://redis:6379
       SERVICE_NAME: tradeit-api
       PORT: 4000
-      GATEWAY_PORT: 4001
     ports:
       - "4000:4000"
     command: ["node", "packages/server/dist/index.js"]
@@ -98,7 +100,6 @@ services:
       KAFKA_BROKERS: kafka:9092
       REDIS_URL: redis://redis:6379
       SERVICE_NAME: tradeit-gateway
-      GATEWAY_PORT: 4001
     ports:
       - "4001:4001"
     command: ["node", "packages/server/dist/gatewayServer.js"]

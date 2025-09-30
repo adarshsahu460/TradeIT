@@ -15,6 +15,7 @@ model User {
   updatedAt     DateTime       @updatedAt
   orders        Order[]
   refreshTokens RefreshToken[]
+  idempotencyKeys IdempotencyKey[]
 }
 
 model Order {
@@ -22,6 +23,7 @@ model Order {
   userId           String
   user             User         @relation(fields: [userId], references: [id])
   symbol           String
+  sequence         BigInt       @db.BigInt
   side             OrderSide
   type             OrderType
   price            Float
@@ -35,6 +37,7 @@ model Order {
   takerTrades      Trade[]      @relation("Taker")
 
   @@index([symbol, status])
+  @@unique([symbol, sequence])
 }
 
 model Trade {
@@ -62,6 +65,32 @@ model RefreshToken {
   createdAt DateTime @default(now())
 
   @@index([userId])
+}
+
+model IdempotencyKey {
+  key       String   @id
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  bodyHash  String
+  commandId String
+  createdAt DateTime @default(now())
+  @@index([userId])
+}
+
+model EventOutbox {
+  id          String   @id @default(uuid())
+  eventType   String
+  payload     Json
+  producedAt  DateTime @default(now())
+  publishedAt DateTime?
+  attempts    Int      @default(0)
+  error       String?
+  orderSymbol String?
+  orderSequence BigInt? @db.BigInt
+
+  @@index([publishedAt])
+  @@index([eventType])
+  @@index([orderSymbol, orderSequence])
 }
 
 enum OrderSide {

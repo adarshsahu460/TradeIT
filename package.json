@@ -9,11 +9,11 @@
   ],
   "scripts": {
     "build": "npm run build --workspace @tradeit/server && npm run build --workspace @tradeit/web",
-  "dev": "npm-run-all --parallel dev:shared dev:server dev:matcher dev:gateway dev:web",
+    "dev": "npm-run-all --parallel dev:shared dev:server dev:matcher dev:gateway dev:web",
     "dev:shared": "npm run watch --workspace @tradeit/shared",
     "dev:server": "npm run dev --workspace @tradeit/server",
-  "dev:matcher": "npm run dev:matcher --workspace @tradeit/server",
-  "dev:gateway": "npm run dev:gateway --workspace @tradeit/server",
+    "dev:matcher": "npm run dev:matcher --workspace @tradeit/server",
+    "dev:gateway": "npm run dev:gateway --workspace @tradeit/server",
     "dev:web": "npm run dev --workspace @tradeit/web",
     "lint": "npm-run-all lint:*",
     "lint:server": "npm run lint --workspace @tradeit/server",
@@ -26,7 +26,7 @@
     "format:server": "npm run format --workspace @tradeit/server",
     "format:web": "npm run format --workspace @tradeit/web",
     "format:shared": "npm run format --workspace @tradeit/shared",
-  "postinstall": "node scripts/postinstall.cjs"
+    "postinstall": "node scripts/postinstall.cjs"
   },
   "devDependencies": {
     "npm-run-all": "^4.1.5",
@@ -34,5 +34,8 @@
   },
   "optionalDependencies": {
     "@esbuild/darwin-arm64": "^0.25.10"
+  },
+  "dependencies": {
+    "prom-client": "^15.1.3"
   }
 }

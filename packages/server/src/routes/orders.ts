@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 
 import type { OrderCommand } from "@tradeit/shared";
 import type { Request, Response } from "express";
@@ -9,6 +9,8 @@ import { authenticate } from "../auth/middleware.js";
 import { config } from "../config.js";
 import { logger } from "../logger.js";
 import { encodeMessage } from "../messaging/codec.js";
+import { getPrismaClient } from "../db.js";
+import { withCorrelation } from "../logger.js";
 import { getProducer } from "../messaging/kafka.js";
 
 const orderSchema = z.object({
@@ -25,6 +27,8 @@ const orderSchema = z.object({
 const router = Router();
 
 router.post("/", authenticate, async (req: Request, res: Response) => {
+  const correlationId = (req as any).correlationId as string | undefined;
+  const log = withCorrelation(correlationId);
   const parsed = orderSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({
@@ -38,6 +42,40 @@ router.post("/", authenticate, async (req: Request, res: Response) => {
   }
 
   const payload = parsed.data;
+
+  // Idempotency key logic
+  const idempotencyKey = (req.headers["x-idempotency-key"] as string | undefined)?.trim();
+  const prisma = getPrismaClient();
+  if (idempotencyKey) {
+    // Hash body + user to avoid leaking body data if stored
+    const bodyHash = createHash("sha256").update(JSON.stringify(payload)).digest("hex");
+    try {
+  const existing = await (prisma as any).idempotencyKey.findUnique({ where: { key: idempotencyKey } });
+      if (existing) {
+        // Validate same user & hash
+        if (existing.userId !== req.user.id || existing.bodyHash !== bodyHash) {
+          return res.status(409).json({ status: "error", message: "Idempotency key conflict" });
+        }
+        return res.status(202).json({
+          status: "queued",
+          commandId: existing.commandId,
+          idempotencyKey,
+          receivedAt: existing.createdAt.getTime(),
+          idempotent: true,
+        });
+      }
+      await (prisma as any).idempotencyKey.create({
+        data: {
+          key: idempotencyKey,
+          userId: req.user.id,
+          bodyHash,
+          commandId: "pending", // will update after enqueue
+        },
+      });
+    } catch (e) {
+      log.warn({ err: e }, "Failed idempotency pre-check");
+    }
+  }
 
   const command: OrderCommand = {
     commandId: randomUUID(),
@@ -62,15 +100,23 @@ router.post("/", authenticate, async (req: Request, res: Response) => {
         },
       ],
     });
-    logger.info({ commandId: command.commandId, symbol: command.symbol }, "Order enqueued successfully");
+    log.info({ commandId: command.commandId, symbol: command.symbol }, "Order enqueued successfully");
+    if (idempotencyKey) {
+      // Best-effort update (ignore failure)
+      void (prisma as any).idempotencyKey.update({
+        where: { key: idempotencyKey },
+        data: { commandId: command.commandId },
+      }).catch((e: unknown) => log.warn({ err: e }, "Failed to update idempotency record"));
+    }
   } catch (error) {
-    logger.error({ error }, "Failed to enqueue order command");
+    log.error({ error }, "Failed to enqueue order command");
     return res.status(503).json({ status: "error", message: "Order queue unavailable" });
   }
 
   return res.status(202).json({
     status: "queued",
     commandId: command.commandId,
+    idempotencyKey: idempotencyKey || null,
     receivedAt: command.timestamp,
   });
 });

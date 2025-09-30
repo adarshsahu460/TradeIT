@@ -138,11 +138,21 @@ export class MatchingEngine {
   private createEvent<TType extends EngineEventMap["type"]>(
     type: TType,
     payload: Extract<EngineEventMap, { type: TType }>["payload"],
+    opts?: { correlationId?: string; orderSequence?: number },
   ): Extract<EngineEventMap, { type: TType }> {
-    return {
+    const producedAt = Date.now();
+    const base: any = {
+      eventId: randomUUID(),
+      version: 1,
       type,
       payload,
-      timestamp: Date.now(),
-    } as Extract<EngineEventMap, { type: TType }>;
+      producedAt,
+      timestamp: producedAt,
+      correlationId: opts?.correlationId,
+    };
+    if (opts?.orderSequence !== undefined) {
+      base.orderSequence = opts.orderSequence;
+    }
+    return base as unknown as Extract<EngineEventMap, { type: TType }>;
   }
 }

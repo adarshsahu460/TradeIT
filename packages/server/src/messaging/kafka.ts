@@ -20,6 +20,13 @@ const getKafka = () => {
 };
 
 export const getProducer = async () => {
+  if (config.isTestEnvironment) {
+    // Return a minimal stub to satisfy interface usage in tests
+    return ({
+      send: async () => {},
+      disconnect: async () => {},
+    } as unknown) as Producer;
+  }
   if (!producerInstance) {
     const kafka = getKafka();
     producerInstance = kafka.producer({

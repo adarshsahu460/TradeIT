@@ -6,7 +6,7 @@ import { logger } from "../logger.js";
 let redisClient: Redis | null = null;
 
 export const getRedisClient = () => {
-  if (!config.redisUrl) {
+  if (!config.redisUrl || config.isTestEnvironment) {
     return null;
   }
   if (!redisClient) {

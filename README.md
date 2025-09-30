@@ -86,7 +86,7 @@ Key variables:
 | `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` | Secrets used to sign access and refresh tokens (required). |
 | `JWT_ACCESS_EXPIRES_IN` / `JWT_REFRESH_EXPIRES_IN` | Token lifetimes (default `15m` / `7d`). |
 | `REFRESH_TOKEN_COOKIE_NAME` / `REFRESH_TOKEN_COOKIE_SECURE` | Refresh cookie name and secure flag. |
-| `KAFKA_BROKERS` | Comma-separated broker list (defaults to `localhost:29092`). In Compose the internal host is `kafka:9092`. |
+| `KAFKA_BROKERS` | Comma-separated broker list (defaults to `localhost:9092`). In containers use `kafka:9092`. Host processes connect via the mapped `localhost:9092`. The server auto-rewrites `kafka:9092` to `localhost:9092` when outside Docker to avoid DNS issues. |
 | `KAFKA_ORDER_TOPIC` / `KAFKA_MARKET_TOPIC` | Kafka topics for order commands and market events. |
 | `SERVICE_NAME` | Service identifier logged by each process. |
 | `REDIS_URL` | Redis connection string for the book snapshot cache. |
@@ -106,6 +106,8 @@ This command also runs Prisma client generation and builds the shared package so
 ```bash
 npm run prisma:migrate:dev --workspace @tradeit/server
 ```
+
+> The server uses a Prisma wrapper script that searches for the root `.env` even when commands execute inside `packages/server/prisma`. If you relocate the root env file, update `scripts/prisma-run.cjs` candidates.
 
 ### 4. Run the development stack
 
@@ -140,6 +142,21 @@ Nginx inside the `web` image proxies:
 ```
 
 Because of this the SPA can operate with *no* hard‑coded host/port for API or WebSocket — relative paths are used by default. `VITE_API_URL` / `VITE_WS_URL` remain optional for non‑Compose deployments (e.g. CDN‑hosted frontend hitting external domains).
+
+### Operational Endpoints
+
+| Endpoint | Purpose |
+| -------- | ------- |
+| `/health` / `/healthz` | Liveness: process is up. |
+| `/readyz` | Readiness: database connectivity (and future broker/cache checks). |
+
+### Idempotent Order Submission
+
+Clients may supply `X-Idempotency-Key` when calling `POST /api/orders`. Duplicate requests with the same key, user, and identical body receive the original `202` response (same `commandId`). Conflicting payloads respond with `409`.
+
+### Rate Limiting
+
+Simple token buckets (in-memory) limit requests per IP and per user (configurable via `RATE_LIMIT_IP_PER_MIN`, `RATE_LIMIT_USER_PER_MIN`). For distributed scaling replace with Redis-based limiter.
 
 ### Deployment Modes
 
@@ -204,6 +221,60 @@ Messages are JSON objects matching the `EngineEventMap` type from `@tradeit/shar
 4. Gateway consumes `market.events`, materializes snapshots (with Redis assistance) and pushes events to WebSocket clients.
 5. UI updates order book & trade tape in real time.
 
+### Durable Event Outbox & Extended Event Envelope
+
+To harden reliability between the matching engine and downstream consumers, the matcher now uses an **outbox pattern**:
+
+1. Orders are matched and results (accepted, trades, snapshot) are generated in-memory.
+2. The order and any trades are **persisted first** (assigning a per‑symbol monotonic `sequence`).
+3. Engine events are enriched with a uniform envelope and written to the `EventOutbox` table inside a transaction separate from publishing.
+4. A background publisher polls the outbox (FIFO by `producedAt`) and delivers events to Kafka (`market.events`).
+5. Upon successful send, rows are marked with `publishedAt`; failures increment `attempts` and are retried next cycle.
+
+This ensures at-least-once delivery while avoiding partial loss if the matcher crashes after persistence but before emitting events. In the (rare) case of duplicate publishes, downstream consumers can de‑duplicate on `eventId`.
+
+#### Event Envelope Fields
+
+All market events share these top-level fields (in addition to the domain `payload`):
+
+| Field | Description |
+| ----- | ----------- |
+| `eventId` | UUID ensuring uniqueness and enabling de‑duplication |
+| `version` | Schema version for forward compatibility (currently `1`) |
+| `type` | Discriminant (`order:accepted`, `order:rejected`, `trade:executed`, `book:snapshot`) |
+| `producedAt` | Millisecond epoch when event was created |
+| `timestamp` | Legacy alias for `producedAt` (for existing clients) |
+| `correlationId` | Propagated tracing / request correlation id (if available) |
+| `orderSequence` | Per‑symbol monotonic sequence (present on order & trade events) |
+| `payload` | Type-specific domain data |
+
+#### Outbox Table (`EventOutbox`)
+
+| Column | Purpose |
+| ------ | ------- |
+| `id` | Primary key (UUID) |
+| `eventType` | Mirrors `type` from the envelope |
+| `payload` | JSON copy of the full event (including metadata) |
+| `producedAt` | Creation time (defaults to now) |
+| `publishedAt` | Set once successfully sent to Kafka |
+| `attempts` | Delivery attempts counter |
+| `error` | Last error message (optional) |
+| `orderSymbol` / `orderSequence` | Indexed ordering metadata for replay / audits |
+
+#### Delivery Semantics
+
+- Current implementation provides **at-least-once** delivery.
+- De‑duplication is the responsibility of consumers (use `eventId`).
+- Ordering is preserved per symbol through `(orderSymbol, orderSequence)`; global cross‑symbol total order is not guaranteed.
+- The publisher batch size / interval (`500ms` default) is tunable; increase frequency for lower latency or increase batch size for throughput.
+
+#### Future Enhancements
+
+- Add exponential backoff & dead-letter table for repeatedly failing events.
+- Expose a replay endpoint to stream events by `(orderSymbol, orderSequence)` or time window.
+- Consider transactional boundary unification: wrap persistence + outbox enqueue in the *same* DB transaction for stronger atomicity.
+- Add consumer-facing event schema registry or version negotiation.
+
 ### Topics
 
 - **Kafka `orders.commands`** — `OrderCommand` payloads from API to matcher (keyed by symbol).
@@ -231,6 +302,7 @@ npm run test --workspace @tradeit/web
 ## Next Steps
 
 - Expand automated test coverage across the new services (matcher command/event flow, websocket gateway broadcasting, auth edge cases).
+- Add integration tests for outbox publishing & de‑duplication logic.
 - Add risk and compliance controls (exposure limits, cancel/replace handling, credit checks).
 - Instrument metrics and tracing (OpenTelemetry, Prometheus) for deep observability in production.
 - Harden deployment with CI pipelines, rolling deploy strategy, and blue/green database migrations.

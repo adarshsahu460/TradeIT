@@ -16,3 +16,6 @@ export const logger = pino({
         },
       },
 });
+
+export const withCorrelation = (correlationId?: string) =>
+  correlationId ? logger.child({ correlationId }) : logger;

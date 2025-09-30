@@ -9,8 +9,11 @@ import { logger } from "./logger.js";
 import { initializeMatchingEngine, engine, launchSyntheticFeed, type IncomingOrder } from "./matching/index.js";
 import { encodeMessage, decodeMessage } from "./messaging/codec.js";
 import { createConsumer, disconnectKafka, getProducer } from "./messaging/kafka.js";
+import { enqueueEvents, startOutboxPublisher } from "./outbox/outboxService.js";
+import { startCleanupLoop } from "./maintenance/cleanup.js";
 import { connectRedis, disconnectRedis, getRedisClient } from "./services/cache.js";
 import { persistProcessedOrder } from "./services/orderPersistence.js";
+import { orderProcessingDuration } from "./metrics/registry.js";
 
 const BOOK_CACHE_TTL_SECONDS = 5;
 
@@ -19,21 +22,8 @@ type SubmitContext = {
   source?: string;
 };
 
-const publishEvents = async (events: MarketEvent[]) => {
-  if (events.length === 0) {
-    return;
-  }
-
-  const producer = await getProducer();
-  const messages = events.map((event) => ({
-    key: event.type,
-    value: encodeMessage(event),
-  }));
-  await producer.send({
-    topic: config.kafkaMarketTopic,
-    messages,
-  });
-};
+// Immediate publish path is replaced by outbox pattern. We retain a direct publish fallback env hook later if needed.
+const publishEvents = async (_events: MarketEvent[]) => { /* no-op: handled by outbox */ };
 
 const updateCacheFromEvents = async (events: MarketEvent[]) => {
   const redis = getRedisClient();
@@ -59,21 +49,21 @@ const toIncomingOrder = (command: OrderCommand): IncomingOrder => ({
 });
 
 const processOrder = async (incomingOrder: IncomingOrder, context: SubmitContext = {}) => {
+  // We capture events, but we want sequence assigned before publishing the order:accepted event.
+  // So we run engine, persist (which mutates order.sequence), then publish events (with updated order object).
   const capturedEvents: MarketEvent[] = [];
-  const unsubscribe = engine.subscribe((event) => {
-    capturedEvents.push(event);
-  });
-
+  const unsubscribe = engine.subscribe((event) => capturedEvents.push(event));
   try {
+    const start = process.hrtime.bigint();
     const result = engine.placeOrder(incomingOrder);
-
     if (result.status === "accepted") {
-      await persistProcessedOrder(result);
+      await persistProcessedOrder(result); // assigns order.sequence
     }
-
-    await updateCacheFromEvents(capturedEvents);
-    await publishEvents(capturedEvents);
-
+  await updateCacheFromEvents(capturedEvents);
+  await enqueueEvents(capturedEvents);
+    const end = process.hrtime.bigint();
+    const seconds = Number(end - start) / 1e9;
+    orderProcessingDuration.observe({ symbol: incomingOrder.symbol, result: result.status }, seconds);
     if (result.status === "rejected") {
       logger.warn({ order: incomingOrder, context }, "Order rejected by matching engine");
     }
@@ -111,12 +101,14 @@ const startConsumer = async () => {
 };
 
 const bootstrap = async () => {
-  logger.info({ service: config.serviceName }, "Starting matcher worker");
+  logger.info({ service: config.serviceName, kafkaBrokers: config.kafkaBrokers }, "Starting matcher worker");
   await connectDatabase();
   await connectRedis();
   await initializeMatchingEngine();
 
   const consumer = await startConsumer();
+  const stopOutbox = startOutboxPublisher(500);
+  const stopCleanup = startCleanupLoop();
   const stopSynthetic = await launchSyntheticFeed(async (order) => {
     await processOrder(order, { commandId: randomUUID(), source: "synthetic" });
   });
@@ -124,7 +116,9 @@ const bootstrap = async () => {
   const shutdown = async () => {
     logger.info("Shutting down matcher worker");
     await Promise.allSettled([
-      consumer.disconnect(),
+  consumer.disconnect(),
+  stopOutbox(),
+  stopCleanup(),
       disconnectKafka(),
       stopSynthetic(),
       disconnectRedis(),

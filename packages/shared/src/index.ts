@@ -4,6 +4,7 @@ export interface Order {
   id: string;
   userId: string;
   symbol: string;
+  sequence?: number; // per-symbol monotonic sequence, populated post-persistence
   side: OrderSide;
   price: number;
   quantity: number;
@@ -52,9 +53,19 @@ export interface OrderBookSnapshot {
 }
 
 export interface EngineEvent<TType extends string, TPayload> {
+  // Core event identity
+  eventId: string; // UUID
+  version: number; // schema version for forward compatibility
   type: TType;
+  // Temporal fields
+  producedAt: number; // ms epoch when event created
+  timestamp: number; // legacy field kept for backward compatibility (same as producedAt initially)
+  // Correlation / tracing
+  correlationId?: string;
+  // Ordering (where applicable)
+  orderSequence?: number; // present for order:accepted and trade events (taker's sequence)
+  // Business payload
   payload: TPayload;
-  timestamp: number;
 }
 
 export type EngineEventMap =

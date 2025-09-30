@@ -50,6 +50,11 @@ const envSchema = z.object({
   KAFKA_MARKET_TOPIC: z.string().optional(),
   REDIS_URL: z.string().optional(),
   SERVICE_NAME: z.string().optional(),
+  RATE_LIMIT_IP_PER_MIN: z.string().optional(),
+  RATE_LIMIT_USER_PER_MIN: z.string().optional(),
+  OUTBOX_RETENTION_HOURS: z.string().optional(),
+  IDEMPOTENCY_RETENTION_HOURS: z.string().optional(),
+  CLEANUP_INTERVAL_MS: z.string().optional(),
 });
 
 const parsed = envSchema.parse(process.env);
@@ -101,6 +106,11 @@ type Config = {
   kafkaMarketTopic: string;
   redisUrl?: string;
   serviceName: string;
+  rateLimitIpPerMin: number;
+  rateLimitUserPerMin: number;
+  outboxRetentionHours: number;
+  idempotencyRetentionHours: number;
+  cleanupIntervalMs: number;
 };
 
 export const config: Config = {
@@ -127,10 +137,29 @@ export const config: Config = {
     return Number.isNaN(parsedValue) ? 1500 : Math.max(parsedValue, 250);
   })(),
   gatewayPort: Number.parseInt(parsed.GATEWAY_PORT ?? "4001", 10),
-  kafkaBrokers: (parsed.KAFKA_BROKERS ?? "localhost:29092").split(",").map((broker) => broker.trim()),
+  // Broker resolution:
+  // - Local development should use localhost:9092 (exposed by docker compose)
+  // - Inside docker-compose network we address the broker as kafka:9092
+  // If the user accidentally supplies kafka:9092 while running outside Docker, DNS lookup will fail (ENOTFOUND kafka).
+  // To make this smoother we rewrite kafka:<port> -> localhost:<port> when we detect we're NOT inside a container.
+  kafkaBrokers: (() => {
+    const raw = (parsed.KAFKA_BROKERS ?? "localhost:9092")
+      .split(",")
+      .map((b) => b.trim())
+      .filter((b) => b.length > 0);
+    // Heuristic: presence of /.dockerenv indicates container
+    const insideContainer = existsSync("/.dockerenv");
+    if (insideContainer) return raw;
+    return raw.map((b) => (b.startsWith("kafka:") ? b.replace(/^kafka:/, "localhost:") : b));
+  })(),
   kafkaClientId: parsed.KAFKA_CLIENT_ID ?? `tradeit-${process.pid}`,
   kafkaOrderTopic: parsed.KAFKA_ORDER_TOPIC ?? "orders.commands",
   kafkaMarketTopic: parsed.KAFKA_MARKET_TOPIC ?? "market.events",
   redisUrl: parsed.REDIS_URL,
   serviceName: parsed.SERVICE_NAME ?? "tradeit-service",
+  rateLimitIpPerMin: Number.parseInt(parsed.RATE_LIMIT_IP_PER_MIN ?? "300", 10),
+  rateLimitUserPerMin: Number.parseInt(parsed.RATE_LIMIT_USER_PER_MIN ?? "180", 10),
+  outboxRetentionHours: Number.parseInt(parsed.OUTBOX_RETENTION_HOURS ?? "24", 10),
+  idempotencyRetentionHours: Number.parseInt(parsed.IDEMPOTENCY_RETENTION_HOURS ?? "24", 10),
+  cleanupIntervalMs: Number.parseInt(parsed.CLEANUP_INTERVAL_MS ?? "600000", 10),
 };

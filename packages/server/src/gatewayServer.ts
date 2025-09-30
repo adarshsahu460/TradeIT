@@ -8,6 +8,7 @@ import WebSocket, { WebSocketServer } from "ws";
 import { config } from "./config.js";
 import { logger } from "./logger.js";
 import { decodeMessage } from "./messaging/codec.js";
+import { kafkaConsumerLagGauge } from "./metrics/registry.js";
 import { createConsumer, disconnectKafka } from "./messaging/kafka.js";
 import { connectRedis, disconnectRedis, getRedisClient } from "./services/cache.js";
 
@@ -81,7 +82,7 @@ const startConsumer = async () => {
   const consumer = await createConsumer("tradeit-gateway");
   await consumer.subscribe({ topic: config.kafkaMarketTopic });
   await consumer.run({
-    eachMessage: async ({ message }: EachMessagePayload) => {
+    eachMessage: async ({ message, partition }: EachMessagePayload) => {
       if (!message.value) {
         return;
       }
@@ -91,6 +92,11 @@ const startConsumer = async () => {
           snapshots.set(event.payload.snapshot.symbol, event.payload.snapshot);
         }
         broadcast(event);
+        // Placeholder lag metric: record offset mod 1000 as pseudo-lag until admin API used.
+        if (message.offset) {
+          const pseudoLag = Number(message.offset) % 1000;
+          kafkaConsumerLagGauge.set({ consumer: "gateway" }, pseudoLag);
+        }
       } catch (error) {
         logger.error({ error }, "Failed to decode market event");
       }
@@ -101,7 +107,7 @@ const startConsumer = async () => {
 };
 
 const bootstrap = async () => {
-  logger.info({ service: config.serviceName }, "Starting gateway server");
+  logger.info({ service: config.serviceName, kafkaBrokers: config.kafkaBrokers }, "Starting gateway server");
   await connectRedis();
   const consumer = await startConsumer();
 
